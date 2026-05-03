@@ -27,14 +27,23 @@ import textwrap
 rates = {
     "oxi_r": 0.083,
     "ppb_ch4": 1930,
-    "mt_to_ppb": 2.75,
-    "ch4_to_co2_mass": 2.75,  # Molecular weight ratio (44/16)
+    #Needs source checking
+    "mt_to_ppb_co2": 0.128,  # Conversion factor from Mt CO₂ to ppm in the atmosphere (approximate)
+    "mt_to_ppb_ch4": 0.35,  # Conversion factor from Mt CH₄ to ppb in the atmosphere (approximate)
+    "ch4_to_co2_mass": 2.5,  # Molecular weight ratio (44/16)
 }
+ch4_to_co2_mass = rates["ch4_to_co2_mass"] 
 
 # Card variables initialized to 0 
 ice = temp = ch4 = co2 = bc = 0
 co2_p = ice_p = temp_p = ch4_p = 0
-base_lineCH4 = 5320
+base_line={
+    "ch4": 5320,
+    "co2": 41000, 
+    "ch4_ppb": 1900,
+    "co2_ppb": 410000
+}
+
 
 ch4_emission = {
     "animal_agriculture": 120,   # livestock enteric + manure
@@ -46,6 +55,27 @@ ch4_emission = {
     "wetlands": 180,
     "unit" : "Mt CH₄/year"   
     # "biomass_burning": 35,     # optional, could add later
+}
+
+
+fossil_fuel = {
+    "coal": {
+        1: {"years": 10, "rate": 0.2},
+        2: {"years": 5, "rate": 0.05},
+        3: {"years": 5, "rate": -0.01}
+    },
+    "oil": {
+        1: {"years": 10, "rate": 0.15},
+        2: {"years": 5, "rate": 0.03},
+        3: {"years": 5, "rate": -0.005}
+
+    },
+    "gas": {
+        1: {"years": 10, "rate": 0.25},
+        2: {"years": 5, "rate": 0.1},
+        3: {"years": 5, "rate": 0.0}
+    }
+
 }
 bc_meta = {
     "shipping": {
@@ -88,12 +118,20 @@ fuel_usage_3 ={
     "gas": 0.0  
 }
 
+growth_rates = {
+    "anima_ag": {"rate": 0.17, "years": 9},
+    "landfill": {"rate": 0.5, "years": 25},
+    "paddy": {"rate": 0.044, "years": 9},
+}
+#Emission types
 ch4_enteric = ch4_emission["animal_agriculture"]
-ch4_landfill = ch4_emission["landfills_waste"]
-ch4_paddy = ch4_emission["rice_paddies"]
-ch4_fossil_fuel = ch4_emission["fossil_fuels"]
+ch4_landfill = ch4_emission["landfills"]
+ch4_paddy = ch4_emission["paddy"]
+#ch4_fossil_fuel = ch4_emission["fossil_fuels"]
 ch4_wetlands = ch4_emission["wetlands"]
-
+ch4_gas = ch4_emission["gas"]
+ch4_oil = ch4_emission["oil"]
+ch4_coal = ch4_emission["coal"]
 
 
 # -------------------------
@@ -144,19 +182,29 @@ def peatland_restoration(period, area):
 #CH4 Emissions
 #-------------------------------------------------
 
-def calc_baseCH4_release_glob(yrs):
+def calc_ch4_stock_outputs(yrs):
     """
     Calculate the remaining baseline CH₄ in the atmosphere after accounting for oxidation over a given number of years.
     """
     # This is the baseline component. Additional emissions from emitter changes are calculated separately and added to total atmospheric stocks. base_lineCH4 represents the existing CH4 stocks in the atmosphere for more details please refer to architecture.md 
-    
+    base_lineCH4 = base_line["ch4"]
+    base_lineCO2 = base_line["co2"]
+    base_lineCH4_ppb = base_line["ch4_ppb"]
+    base_lineCO2_ppb = base_line["co2_ppb"]
     if yrs == 0:
-        return base_lineCH4
+        return base_lineCH4, base_lineCO2, base_lineCH4_ppb, base_lineCO2_ppb
     
     for _ in range(yrs):
-        base_lineCH4*= (1 - rates["oxi_r"])  # from the existing stocks the oxidation is deducted
-        
-    return round(base_lineCH4, 2)
+        ch4_stocks =base_lineCH4*(1 - rates["oxi_r"])  # from the existing stocks the oxidation is deducted
+        co2_added = (base_lineCH4* rates["oxi_r"]) * ch4_to_co2_mass # calculate the CO2 added to the atmosphere from the oxidized CH4, using the molecular weight ratio of 2.5.
+        base_lineCH4 = ch4_stocks # the new total CH4 in the atmosphere after accounting for oxidation becomes the baseline for the next year.
+        base_lineCO2 += co2_added # the new total CO2 in the atmosphere after accounting for oxidation becomes the baseline for the next year.
+    
+    
+    ch4_ppb = ch4_stocks * rates["mt_to_ppb_ch4"]
+    co2_ppb = base_lineCO2 * rates["mt_to_ppb_co2"]
+
+    return round(ch4_stocks, 2), round(base_lineCO2, 2), round(ch4_ppb, 2), round(co2_ppb, 2)
 
 
 
@@ -211,8 +259,8 @@ def calc_annual_growth_rate(years, gowth):
 
     return annual_rate
 
-def calc_ch4_a_ag(t_slider, animal_ag_slider):
-    """
+""" def calc_ch4_a_ag(t_slider, animal_ag_slider):
+    
     t_slider: number of years
     animal_ag_slider: fractional total change (e.g., -50% = -0.5)
     oxi_r: oxidation rate (fraction)
@@ -221,7 +269,7 @@ def calc_ch4_a_ag(t_slider, animal_ag_slider):
     
     Returns:
         atmospheric CH₄ contribution from animal agriculture over t_slider years, with growth and oxidation applied
-    """
+    
 
     #calculate annual growth rate
     #annual_rate = calc_emit_growth_rate(animal_ag_slider, t_slider)
@@ -317,11 +365,10 @@ def calc_paddy_emmision (paddy_slider, t_slider):
             total += current_emission # the new emission is added to the total additional emissions from paddy fields
             total = total * (1 - rates["oxi_r"]) # from the total after counting for the oxidation, this is the new stocks in the atmosphere from paddy fields emissions.
 
-        return total
+        return total """
     
-def calc_fossilfuel_emissions_bau(t_slider, fuel_type):
-                              
-     """
+def calc_fossilfuel_emissions_bau(t_slider, fossil_slider, fuel_type):
+    """
      Calculate the total methane emissions from fossil fuel extraction over a specified time horizon, accounting for growth rates and oxidation.
 
      Parameters:
@@ -332,89 +379,142 @@ def calc_fossilfuel_emissions_bau(t_slider, fuel_type):
      Returns:
      - Total methane emissions from fossil fuel extraction over the specified time horizon, adjusted for oxidation.
      """
-     if t_slider == 0:
-        return 0
-     annual_rate = fuel_usage_1[fuel_type] # use the predicted growth in coal usage to calculate the growth rate.
-     current_emission = ch4_emission[fuel_type]
-     total = 0
-     for _ in range(min(t_slider,10)):
-        current_emission += current_emission * annual_rate
-        total += current_emission
-        total = total * (1 - rates["oxi_r"])
-     if t_slider <= 10:
-        return total
+    #calc_BAU_emission_fuel(t_slider, "coal") this is the function call for testing, it should return the total emissions from coal extraction over 10 years with a growth rate of 20% per year.
+    #fuel =fossil_fuel[fuel_type]
+    if t_slider == 0 or fossil_slider != 0:
+        return 0,0,0,0
+    
+    # initialize the total additional emissions from fossil fuel to 0, this variable will be updated each year with the new emissions from fossil fuel extraction.
+    fuel_ch4, ch4_stocks_fule, co2_added, ch4_ppb_fuel, co2_ppb_fuel = 0, 0, 0, 0, 0
+    current_emission = ch4_emission[fuel_type] # the current emission is the baseline emission from fossil fuel, this is the starting point for calculating the growth in emissions from fossil fuel.
+    #eg. ch4_gas = ch4_emission["gas"]
+    # --- PHASE 1: Years 1 to 10 ---
+    phase = 1
+    p1 = 10 # use 10 years as the time horizon to calculate the growth rate for phase 1.
+    years_p1 = min(t_slider, p1) # calculate the number of years in phase 1 based on the time slider
+    growth_rate1 = fossil_fuel[fuel_type][phase]["rate"] # get the growth rate for phase 1 from the fossil fuel data
+    for _ in range(years_p1):
+        current_emission += current_emission * growth_rate1 # each year the emission increases by the growth rate for phase 1, this is the new emission for that year.
+        fuel_ch4 += current_emission # the new emission is added to the total additional emissions from fossil fuel
+        ch4_stocks_fule = fuel_ch4 * (1 - rates["oxi_r"]) # from the total after counting for the oxidation, this is the new stocks in the atmosphere from fossil fuel emissions.
+        oxidized_ch4 = fuel_ch4 * rates["oxi_r"] # calculate the amount of CH4 that is oxidized each year based on the oxidation rate.
+        co2_added += (oxidized_ch4) * ch4_to_co2_mass # calculate the CO2 added to the atmosphere from the oxidized CH4, using the molecular weight ratio of 2.5.
+        fuel_ch4 -= oxidized_ch4 # subtract the oxidized CH4 from the total CH4 to get the new total CH4 in the atmosphere after accounting for oxidation.
+    
+    if t_slider > 10:
+        # --- PHASE 2: Years 11 to 15 ---
+        phase = 2
+        p2 = 5 # use 5 years as the time horizon to calculate the growth rate for phase 2.
+        years_p2 = min(t_slider - p1, p2) # calculate the number of years in phase 2 based on the time slider
+        growth_rate2 = fossil_fuel[fuel_type][phase]["rate"] # get the growth rate for phase 2 from the fossil fuel data
+        for _ in range(years_p2):
+            current_emission += current_emission * growth_rate2 # each year the emission increases by the growth rate for phase 2, this is the new emission for that year.
+            fuel_ch4 += current_emission # the new emission is added to the total additional emissions from fossil fuel
+            ch4_stocks_fule = fuel_ch4 * (1 - rates["oxi_r"]) # from the total after counting for the oxidation, this is the new stocks in the atmosphere from fossil fuel emissions.
+            oxidized_ch4 = fuel_ch4 * rates["oxi_r"] # calculate the amount of CH4 that is oxidized each year based on the oxidation rate.
+            co2_added += (oxidized_ch4) * ch4_to_co2_mass # calculate the CO2 added to the atmosphere from the oxidized CH4, using the molecular weight ratio of 2.5.
+            fuel_ch4 -= oxidized_ch4 # subtract the oxidized CH4 from the total CH4 to get the new total CH4 in the atmosphere after accounting for oxidation.
+    
+    if t_slider > 15:
+        phase = 3
+         # --- PHASE 3: Years 16 to 20 ---
+        p3 = 5 # use 5 years as the time horizon to calculate the growth
+            # rate for phase 3.
+        years_p3 = min(t_slider - 15, p3) # calculate the number of years in phase 3 based on the time slider
+        growth_rate3 = fossil_fuel[fuel_type][phase]["rate"] # get the growth rate for phase 3 from the fossil fuel data
+        for _ in range(years_p3):
+            current_emission += current_emission * growth_rate3 # each year the emission increases by the growth rate for phase 2, this is the new emission for that year.
+            fuel_ch4 += current_emission # the new emission is added to the total additional emissions from fossil fuel
+            ch4_stocks_fule = fuel_ch4 * (1 - rates["oxi_r"]) # from the total after counting for the oxidation, this is the new stocks in the atmosphere from fossil fuel emissions.
+            oxidized_ch4 = fuel_ch4 * rates["oxi_r"] # calculate the amount of CH4 that is oxidized each year based on the oxidation rate.
+            co2_added += (oxidized_ch4) * ch4_to_co2_mass # calculate the CO2 added to the atmosphere from the oxidized CH4, using the molecular weight ratio of 2.5.
+            fuel_ch4 -= oxidized_ch4 # subtract the oxidized CH4 from the total CH4 to get the new total CH4 in the atmosphere after accounting for oxidation.
+    
+    ch4_ppb_fuel = ch4_stocks_fule / rates["ppb_ch4"] # calculate the change in parts per billion (ppb) of CH4 in the atmosphere from the total additional emissions from fossil fuel, using the conversion factor from Mt CH4 to ppb. 
+    co2_ppb_fuel = co2_added / rates["mt_to_ppb_co2"] # calculate the change in parts per billion (ppb) of CO2 in the atmosphere from the total CO2 added, using the conversion factor from Mt CO2 to ppm.
+    return ch4_stocks_fule, co2_added, ch4_ppb_fuel, co2_ppb_fuel          
 
-        # Calculate for the next 5 years.
-                
-                
-     annual_rate = fuel_usage_2[fuel_type]
 
-     for _ in range(min(t_slider - 10, 5)):
-            current_emission += current_emission * annual_rate
-            total += current_emission
-            total = total * (1 - rates["oxi_r"])
-     if t_slider <= 15:
-        return total
-          
-        # Calculate for the last few years.
-     annual_rate = fuel_usage_3[fuel_type] # use the predicted growth in coal usage to calculate the growth rate.
-       
-     for _ in range(t_slider - 15):
-        current_emission += current_emission * annual_rate
-        total += current_emission
-        total = total * (1 - rates["oxi_r"])
-
-     return total  
-
-def calc_fossilfuel_emission_override (fossil_slider, t_slider, fossil_type):
-    if t_slider == 0:
-        return 0
-    growth = calc_emit_growth_rate(fossil_slider, t_slider) 
+def calc_fossil_emission_override (fossil_slider, t_slider, fossil_type):
+    
+    fuel_ch4, ch4_stocks_fule, co2_added, ch4_ppb_fuel, co2_ppb_fuel = 0, 0, 0, 0, 0
+    current_emission = ch4_emission[fuel_type] # the current emission is the baseline emission from fossil fuel, this is the starting point for calculating the growth in emissions from fossil fuel.
+    
+    if t_slider == 0 or fossil_slider == 0:
+        return 0,0,0,0
+    growth = calc_emit_growth_rate(fossil_slider, t_slider)
     total = 0
     current_emission = ch4_emission[fossil_type] # the current emission is the baseline emission from fossil fuel, this is the starting point for calculating the growth in emissions from fossil fuel.
-        
     for _ in range(t_slider):
-        current_emission += current_emission* growth # each year the emission increases by the growth rate, this is the new emission for that year.
-        total += current_emission # the new emission is added to the total additional emissions from coal
-        total = total * (1 - rates["oxi_r"]) # from the total after counting for the oxidation, this is the new stocks in the atmosphere from coal emissions.
+        fuel_ch4 += current_emission * growth # the new emission is added to the total additional emissions from fossil fuel
+        ch4_stocks_fule = fuel_ch4 * (1 - rates["oxi_r"]) # from the total after counting for the oxidation, this is the new stocks in the atmosphere from fossil fuel emissions.
+        oxidized_ch4 = fuel_ch4 * rates["oxi_r"] # calculate the amount of CH4 that is oxidized each year based on the oxidation rate.
+        co2_added += (oxidized_ch4) * ch4_to_co2_mass # calculate the CO2 added to the atmosphere from the oxidized CH4, using the molecular weight ratio of 2.5.
+        fuel_ch4 -= oxidized_ch4
+    return ch4_stocks_fule, co2_added, ch4_ppb_fuel, co2_ppb_fuel
 
-    return total  
 
-def calc_coal_emission (coal_slider, t_slider):
+def calc_sector_emission_bau (t_slider, sector_slider, sector):
+    if t_slider == 0 or sector_slider != 0:
+        return 0,0,0,0
+    #calculate the emission rate, based on the predictions.
+    # Access the global dictionary
+    growth  = growth_rates[sector]["rate"]# get the growth rate for the sector from the growth rates data
+    yrs = growth_rates[sector]["years"] # get the time horizon for the growth rate from the growth rates data
+    annual_rate = calc_annual_growth_rate(yrs, growth) # calculate the annual growth rate based on the time horizon and the growth rate for the sector.
     
-    if t_slider == 0:
-        return 0
-    if coal_slider == 0:
-        return calc_fossilfuel_emissions_bau(t_slider, "coal")
+    # Initializing  accumulators
+    current_emission = ch4_emission[sector] # the current emission is the baseline emission from the sector, this is the starting point for calculating the growth in emissions from the sector.
+    ch4_stocks_sector, co2_added,  = 0, 0
+    
+    for _ in range(t_slider):
+        current_emission *= (1 + annual_rate) # the new emission is added to the total additional emissions from fossil fuel
+        ch4_stocks_sector += current_emission * (1 - rates["oxi_r"]) # from the total after counting for the oxidation, this is the new stocks in the atmosphere from fossil fuel emissions.
+        oxidized_ch4 = current_emission * rates["oxi_r"] # calculate the amount of CH4 that is oxidized each year based on the oxidation rate.
+        co2_added += (oxidized_ch4) * ch4_to_co2_mass # calculate the CO2 added to the atmosphere from the oxidized CH4, using the molecular weight ratio of 2.5.
+        ch4_stocks_sector -= oxidized_ch4 
+    
+    co2_ppb_sector = co2_added / rates["mt_to_ppb_co2"] # calculate the change in parts per billion (ppb) of CO2 in the atmosphere from the total CO2 added, using the conversion factor from Mt CO2 to ppm.
+    ch4_ppb_sector = ch4_stocks_sector / rates["ppb_ch4"] # calculate the change in parts per billion (ppb) of CH4 in the
+    
+    return ch4_stocks_sector, co2_added, ch4_ppb_sector, co2_ppb_sector
+
+def calc_sector_emission_override(t_slider, sector, sector_slider):
+    if t_slider == 0 or sector_slider == 0:
+        return 0, 0, 0, 0
+    
+    # Initialize variables from global data
+    yrs = t_slider
+    growth = sector_slider
+    annual_rate = calc_annual_growth_rate(yrs, growth)
+    
+    # Initialize local variables
+    current_emission = ch4_emission[sector] 
+    ch4_stocks_sector = 0
+    co2_added = 0
+
+    for _ in range(t_slider):
+        # Apply the user-defined growth/reduction rate
+        current_emission *= (1 + annual_rate) 
         
-    return calc_fossilfuel_emission_override(coal_slider, t_slider, "coal")
-    
-
-def calc_oil_emission (oil_slider, t_slider):
-    
-    if t_slider == 0:
-        return 0
-    if oil_slider == 0:
-        return calc_fossilfuel_emissions_bau(t_slider, "oil")
+        # Add yearly flow to the atmospheric stock
+        ch4_stocks_sector += current_emission
         
-    return calc_fossilfuel_emission_override(oil_slider, t_slider, "oil")
-
-def calc_gas_emission (gas_slider, t_slider):
-    
-    if t_slider == 0:
-        return 0
-    if gas_slider == 0:
-        return calc_fossilfuel_emissions_bau(t_slider, "gas")
+        # Calculate oxidation on the TOTAL stock
+        oxidized_this_year = ch4_stocks_sector * rates["oxi_r"]
         
-    return calc_fossilfuel_emission_override(gas_slider, t_slider, "gas")
+        # Mass balance: convert oxidized CH4 to CO2
+        co2_added += oxidized_this_year * ch4_to_co2_mass
+        
+        # Remove the oxidized portion from the methane stock
+        ch4_stocks_sector -= oxidized_this_year
     
-def fossil_fuel_emission (coal_slider, oil_slider, gas_slider, t_slider):
-    if t_slider == 0:
-        return 0
-    coal_emission = calc_coal_emission(coal_slider, t_slider)
-    oil_emission = calc_oil_emission(oil_slider, t_slider)
-    gas_emission = calc_gas_emission(gas_slider, t_slider)
-    return coal_emission + oil_emission + gas_emission             
+    # 3. Final conversion to concentrations
+    co2_ppb_sector = co2_added / rates["mt_to_ppb_co2"]
+    ch4_ppb_sector = ch4_stocks_sector / rates["ppb_ch4"]
+    
+    return ch4_stocks_sector, co2_added, ch4_ppb_sector, co2_ppb_sector
+
 # -------------------------
 # Streamlit UI Setup
 # -------------------------
@@ -659,9 +759,73 @@ with col3:
             st.markdown(f"""<div class="card"><h3 class="card_heading">Increase in Summer Sea Ice</h3>
               <div><h3 class=variable>{ice_p}</h3></div></div>""", unsafe_allow_html=True)
 
-#  baseline CH4 calculation for now
+#  baseline CH4, co2, ch4ppb, co2ppb, temp_delta calculation for now
+if t_slider == 0:
+    global_ch4 = base_lineCH4
+    global_co2 = base_lineCO2
+    #Need to include blackcarbon for the arcitic 
+    global_temp_delta = 0.0
+    arctic_temp_delta = 0.0
+    global_ch4_ppb = base_lineCH4_ppb
+    global_co2_ppb = base_lineCO2_ppb
 
-global_ch4 = calc_baseCH4_release_glob(yrs=t_slider) + calc_ch4_a_ag(t_slider, animal_ag_slider)+ calc_CH4_landfill(land_slider, t_slider)+calc_paddy_emmision (paddy_slider, t_slider) + calc_fossil_fuel(t_slider,fossil_slider)
+    
+
+if t_slider != 0 and all(slider == 0 for slider in [animal_ag_slider, land_slider, paddy_slider, coal, oil, gas]):
+# this is the BAU scenario, the emissions from the emitters grow based on the predicted rates
+#Calculating emissions from the fossil fuel (gas, coal and oil)
+ch4_fuel_coal, co2_fuel_coal, ch4_ppb_coal, co2_ppb_coal = calc_fossilfuel_emissions_bau(t_slider, "coal")
+ch4_fuel_oil, co2_fuel_oil, ch4_ppb_oil, co2_ppb_oil = calc_fossilfuel_emissions_bau(t_slider, "oil")
+ch4_fuel_gas, co2_fuel_gas, ch4_ppb_gas, co2_ppb_gas = calc_fossilfuel_emissions_bau(t_slider, "gas")\
+#Calculate the emissions from animal ag
+#ch4_animal_ag, co2_animal_ag, ch4_ppb_animal_ag, co2_ppb_animal_ag = calc_animal_ag_emissions_bau (t_slider, animal_ag_slider)
+    #Animal_ag
+    aa_growth_rate = 0.17
+    years = 9
+     # use the predicted growth in animal ag to calculate the annual growth rate.
+    animal_ag_rate = calc_annual_growth_rate(years, aa_growth_rate) 
+    
+    #land fill
+    land_growth_rate = 0.5
+    years = 25
+    # use the predicted growth in land fill to calculate the annual growth rate.
+    land_fill_rate = calc_annual_growth_rate(years,land_growth_rate)
+    
+    #Paddy
+    paddy_growth_rate = 0.044
+    years = 9
+    # use the predicted growth in paddy fields to calculate the annual growth rate.
+    paddy_rate = calc_annual_growth_rate(years, paddy_growth_rate) 
+    
+    """ #Coal, oil and gas
+    if t_slider <= 10:
+         years
+         coal_growth_rate = fuel_usage_1["coal"] # use the predicted growth in coal usage to calculate the growth rate.
+         oil_growth_rate = fuel_usage_1["oil"] # use the predicted growth in oil usage to calculate the growth rate.
+         gas_growth_rate = fuel_usage_1["gas"] # use the predicted growth in gas usage to calculate the growth rate.
+         #calculate the growth rate for coal, oil and gas based on the predicted growth in coal, oil and gas usage for the first 10 years.
+         coal_rate_10 = calc_annual_growth_rate(years, coal_growth_rate) 
+         oil_rate_10 = calc_annual_growth_rate(years, oil_growth_rate)
+         gas_rate_10 = calc_annual_growth_rate(years, gas_growth_rate)
+    
+    elif t_slider <= 15:
+        coal_rate = fuel_usage_2["coal"] # use the predicted growth in coal usage to calculate the growth rate.
+        oil_rate = fuel_usage_2["oil"] # use the predicted growth in oil usage to calculate the growth rate.
+        gas_rate = fuel_usage_2["gas"] # use the predicted growth in gas usage to calculate the growth rate.
+    else:
+        coal_rate = fuel_usage_1["coal"] # use the predicted growth in coal usage to calculate the growth rate.
+        oil_rate = fuel_usage_1["oil"] # use the predicted growth in oil usage to calculate the growth rate.
+        gas_rate = fuel_usage_1["gas"] # use the predicted growth in gas usage to calculate the growth rate.
+     """
+    # Senario 2 need to be written below skethch
+    growth_rate_animal_ag = calc_emit_growth_rate(animal_ag_slider, t_slider)
+    growth_rate_land_fill = calc_emit_growth_rate(land_slider, t_slider)
+    growth_rate_paddy = calc_emit_growth_rate(paddy_slider, t_slider)
+    growth_rate_coal = calc_emit_growth_rate(coal, t_slider)
+    growth_rate_oil = calc_emit_growth_rate(oil, t_slider)
+    growth_rate_gas = calc_emit_growth_rate(gas, t_slider)
+
+global_ch4 = calc_baseCH4_release_glob(yrs=t_slider) + calc_ch4_a_ag(t_slider, animal_ag_slider)+ calc_CH4_landfill(land_slider, t_slider)+calc_paddy_emmision (paddy_slider, t_slider)+ calc_fossilfuel_emissions_bau(t_slider, "coal")[0] + calc_fossilfuel_emissions_bau(t_slider, "oil")[0] + calc_fossilfuel_emissions_bau(t_slider, "gas")[0]
 global_ch4 = round(global_ch4, 3)
 
 #Calculating black carbon
