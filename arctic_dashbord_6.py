@@ -35,7 +35,7 @@ rates = {
 ch4_to_co2_mass = rates["ch4_to_co2_mass"] 
 
 # Card variables initialized to 0 
-ice = temp = ch4 = co2 = bc = 0
+ice = temp  = bc = 0
 co2_p = ice_p = temp_p = ch4_p = 0
 base_line={
     "ch4": 5320,
@@ -43,6 +43,11 @@ base_line={
     "ch4_ppb": 1900,
     "co2_ppb": 410000
 }
+ch4 = base_line["ch4"]
+co2 = base_line["co2"]
+ch4_ppb = base_line["ch4_ppb"]
+co2_ppb = base_line["co2_ppb"]
+
 
 
 ch4_emission = {
@@ -119,11 +124,11 @@ fuel_usage_3 ={
 }
 
 growth_rates = {
-    "anima_ag": {"rate": 0.17, "years": 9},
+    "animal_ag": {"rate": 0.17, "years": 9},
     "landfill": {"rate": 0.5, "years": 25},
     "paddy": {"rate": 0.044, "years": 9},
 }
-#Emission types
+""" #Emission types
 ch4_enteric = ch4_emission["animal_agriculture"]
 ch4_landfill = ch4_emission["landfills"]
 ch4_paddy = ch4_emission["paddy"]
@@ -131,7 +136,7 @@ ch4_paddy = ch4_emission["paddy"]
 ch4_wetlands = ch4_emission["wetlands"]
 ch4_gas = ch4_emission["gas"]
 ch4_oil = ch4_emission["oil"]
-ch4_coal = ch4_emission["coal"]
+ch4_coal = ch4_emission["coal"] """
 
 
 # -------------------------
@@ -182,29 +187,26 @@ def peatland_restoration(period, area):
 #CH4 Emissions
 #-------------------------------------------------
 
-def calc_ch4_stock_outputs(yrs):
+def calc_ch4_stock_outputs(yrs, base_line):
     """
     Calculate the remaining baseline CH₄ in the atmosphere after accounting for oxidation over a given number of years.
     """
     # This is the baseline component. Additional emissions from emitter changes are calculated separately and added to total atmospheric stocks. base_lineCH4 represents the existing CH4 stocks in the atmosphere for more details please refer to architecture.md 
-    base_lineCH4 = base_line["ch4"]
-    base_lineCO2 = base_line["co2"]
-    base_lineCH4_ppb = base_line["ch4_ppb"]
-    base_lineCO2_ppb = base_line["co2_ppb"]
     if yrs == 0:
-        return base_lineCH4, base_lineCO2, base_lineCH4_ppb, base_lineCO2_ppb
-    
+        base_line_co2 = base_line["co2"]
+        base_line_co2_ppb = base_line["co2_ppb"]
+        base_line_ch4_ppb = base_line["ch4 _ppb"]
+        return base_line, base_line_co2, base_line_ch4_ppb, base_line_co2_ppb.
+    stocks_ch4 =base_line
+    oxidized_ch4, co2_added = 0, 0
     for _ in range(yrs):
-        ch4_stocks =base_lineCH4*(1 - rates["oxi_r"])  # from the existing stocks the oxidation is deducted
-        co2_added = (base_lineCH4* rates["oxi_r"]) * ch4_to_co2_mass # calculate the CO2 added to the atmosphere from the oxidized CH4, using the molecular weight ratio of 2.5.
-        base_lineCH4 = ch4_stocks # the new total CH4 in the atmosphere after accounting for oxidation becomes the baseline for the next year.
-        base_lineCO2 += co2_added # the new total CO2 in the atmosphere after accounting for oxidation becomes the baseline for the next year.
+        oxidized_ch4 = stocks_ch4 * rates["oxi_r"]
+        stocks_ch4 -= oxidized_ch4
+        co2_added += oxidized_ch4 * ch4_to_co2_mass
     
-    
-    ch4_ppb = ch4_stocks * rates["mt_to_ppb_ch4"]
-    co2_ppb = base_lineCO2 * rates["mt_to_ppb_co2"]
-
-    return round(ch4_stocks, 2), round(base_lineCO2, 2), round(ch4_ppb, 2), round(co2_ppb, 2)
+    co2_ppb = co2_added / rates["mt_to_ppb_co2"]
+    ch4_ppb = stocks_ch4 / rates["ppb_ch4"]
+    return round(stocks_ch4, 2), round(co2_added, 2), round(ch4_ppb, 2), round(co2_ppb, 2)
 
 
 
@@ -272,7 +274,7 @@ def calc_annual_growth_rate(years, gowth):
     
 
     #calculate annual growth rate
-    
+   """ 
     
 def calc_fossilfuel_emissions_bau(t_slider, fossil_slider, fuel_type):
     """
@@ -667,23 +669,36 @@ with col3:
               <div><h3 class=variable>{ice_p}</h3></div></div>""", unsafe_allow_html=True)
 
 #  baseline CH4, co2, ch4ppb, co2ppb, temp_delta calculation for now
+#state 0 of the app.
 if t_slider == 0:
-    global_ch4 = base_lineCH4
-    global_co2 = base_lineCO2
+    ch4 = base_line["ch4"]
+    co2 = base_line["co2"]
+    ch4_ppb = base_line["ch4_ppb"]
+    co2_ppb = base_line["co2_ppb"]
     #Need to include blackcarbon for the arcitic 
+    #global_temp_delta and arctic_temp_delta needs to be calcualted. 
     global_temp_delta = 0.0
     arctic_temp_delta = 0.0
-    global_ch4_ppb = base_lineCH4_ppb
-    global_co2_ppb = base_lineCO2_ppb
 
+
+#Modeling senario 1: BAU scenario, where the emissions from the emitters grow based on the predicted rates. 
+# This is the default scenario when the user does not change any of the sliders for the emitters. 
+# The growth rates for each emitter are based on the predictions from the literature review 
+#However it should be noted that for animal ag and paddy predictions are untill 2034. the model has timelien of 20 years
+#One of the limitations is that the model From this point onward, paddy, animal agriculture projections are extrapolated beyond available data.
+
+elif t_slider != 0 and all(slider == 0 for slider in [animal_ag_slider, land_slider, paddy_slider, coal, oil, gas]):
+    # calculate the BAU emissions from each emitter.
     
-
-if t_slider != 0 and all(slider == 0 for slider in [animal_ag_slider, land_slider, paddy_slider, coal, oil, gas]):
-# this is the BAU scenario, the emissions from the emitters grow based on the predicted rates
-#Calculating emissions from the fossil fuel (gas, coal and oil)
-ch4_fuel_coal, co2_fuel_coal, ch4_ppb_coal, co2_ppb_coal = calc_fossilfuel_emissions_bau(t_slider, "coal")
-ch4_fuel_oil, co2_fuel_oil, ch4_ppb_oil, co2_ppb_oil = calc_fossilfuel_emissions_bau(t_slider, "oil")
-ch4_fuel_gas, co2_fuel_gas, ch4_ppb_gas, co2_ppb_gas = calc_fossilfuel_emissions_bau(t_slider, "gas")\
+    ch4_fuel_coal, co2_fuel_coal, ch4_ppb_coal, co2_ppb_coal = calc_fossilfuel_emissions_bau(t_slider, "coal")
+    ch4_fuel_oil, co2_fuel_oil, ch4_ppb_oil, co2_ppb_oil = calc_fossilfuel_emissions_bau(t_slider, "oil")
+    ch4_fuel_gas, co2_fuel_gas, ch4_ppb_gas, co2_ppb_gas = calc_fossilfuel_emissions_bau(t_slider, "gas")
+    ch4_animal_ag, co2_animal_ag, ch4_ppb_animal_ag, co2_ppb_animal_ag = calc_sector_emission_bau(t_slider, "animal_ag", animal_ag_slider)
+    ch4_land_fill, co2_land_fill, ch4_ppb_land_fill, co2_ppb_land_fill = calc_sector_emission_bau(t_slider, "land_fill", land_slider)
+    ch4_paddy, co2_paddy, ch4_ppb_paddy, co2_ppb_paddy = calc_sector_emission_bau(t_slider, "paddy", paddy_slider) 
+    initial_ch4 = base_line["ch4"]
+    ch4_from_2025, co2_from_2025, ch4_ppb_from_2025, co2_ppb_from_2025 = calc_ch4_stock_outputs(t_slider, initial_ch4)
+    ch4 = ch4_fuel_coal + ch4_fuel_oil + ch4_fuel_gas + ch4_animal_ag + ch4_land_fill + ch4_paddy + ch4_from_2025
 #Calculate the emissions from animal ag
 #ch4_animal_ag, co2_animal_ag, ch4_ppb_animal_ag, co2_ppb_animal_ag = calc_animal_ag_emissions_bau (t_slider, animal_ag_slider)
     #Animal_ag
