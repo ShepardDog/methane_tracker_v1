@@ -1,35 +1,78 @@
-🧊 PoleWatch: Arctic Methane Logic (V1.0)A System Dynamics Framework for Sectoral Emissions & Arctic Restoration Overview. MVP - Minimal Viable Physics
+🧊 PoleWatch: Methane to Melt (M2M)- A Reduced-Order Methane Climate Mode (V0.5)
+🌍 Methane Engine — README 
+1. Overview - Version 0.5 - Minimal Viable Physics MVP
+M2 M is an independent research tool designed to visualize the impact of specific methane (CH₄) sources on the Arctic energy balance.
+The methane engine simulates atmospheric CH₄ concentration, radiative forcing, and warming over a user‑defined time horizon (up to 20 in the app). It uses:
 
-PoleWatch is an independent research tool designed to visualize the impact of specific methane (CH₄) sources on the Arctic energy balance. 
-Core Features (V.0.5)
-First-Order Decay Engine: Implements a linear oxidation model (8.3% annual decay) to track atmospheric stock over a 20-year horizon.
-Sectoral Isolation: Independent variables for enteric fermentation, rice cultivation, and fossil fuel leakages.Arctic Restoration Modules: Quantifiable offsets based on Peatland restoration and Kelp/Tundra sequestration rates.Black Carbon (Soot) Logic: Integration of albedo-loss metrics driven by shipping and flaring.
+Yearly timesteps
+End‑of‑year state updates
+Physically grounded oxidation
+Sector‑specific emissions
+Etminan et al. (2016) radiative forcing
+IPCC AR6 climate sensitivity
+The engine outputs:
+CH₄ stock (Tg)
+CH₄ concentration (ppb)
+Radiative forcing (W/m²)
+Warming (°C)
+Δforcing and Δwarming relative to “current” conditions
 
-⚠️ Known Limitations 
-(V1.0) This version serves as a functional baseline and utilizes the following simplifications
+2. Model Assumptions
+Time evolves in yearly steps.
+Within each year:
+Oxidation acts on the existing CH₄ stock.
+New emissions are added.
+Oxidation follows a constant fractional decay based on lifetime.
+Emissions from each sector are modeled independently.
+Wetland emissions are constant in v0.5 (temperature‑dependent in v1).
+Radiative forcing uses the Etminan non‑linear formula.
+Climate sensitivity uses IPCC AR6 λ = 0.8 °C per W/m².
 
-Linear Oxidation Constant: 
+Emissions Model
+Anthropogenic sectors
+Animal agriculture
+Paddy cultivation
+Landfills & wastewater
+Each has a BAU growth rate and a slider‑adjusted growth rate
 
-V1.0 assumes a fixed 8.3% oxidation rate. It does not yet account for the non-linear "step-response" or the chemical competition for OH radicals in the atmosphere. 
-Static Baseline: 
-The model utilizes the Global Methane Budget 2023 as a fixed starting point. It does not currently account for dynamic "Natural Feedback" increases (e.g., accelerating permafrost thaw).
+Animal Ag has a Humane phaseout curve- this assumes that it will take over unrealistic input such as cut down animal ag emissions by 100% in one year- this is not possible as animals have a natural life span and in this model, we respect the lives of the individuals 
 
-Simplified Radiative Forcing: 
-The conversion from mass (Mt) to temperature (Delta T) uses a standardized coefficient that does not account for spectral overlap with other greenhouse gases.
+Fossil fuels
+Three‑phase model:
+Phase 1 (10 years)
+Phase 2 (5 years)
+Phase 3 (5 years)
+Each phase has its own growth rate.
 
-Albedo Feedback: 
-While Black Carbon is tracked, the self-reinforcing loop of sea-ice loss (Albedo Feedback) is modeled as a linear impact rather than an exponential acceleration.
+Natural emissions
+Wetlands = constant 180 Mt/year (v0.5) 
 
-🚀 Roadmap (V1.5 & V2.0)
-V1.5: "The Physics Upgrade" GWP Methodology:
 
-Transition from GWP100 to GWP to better reflect the short-lived nature of methane as a "flow" gas.
-Non-Linear Decay: Implementation of a variable oxidation curve based on atmospheric chemistry projections.
-UI Overhaul: Migration from "Ugly UI" to an Arctic-themed Glassmorphism dashboard with interactive gauge charts.
-V2.0: "The Biological Bridge" Species Survival Metrics: Linking temperature deltas directly to sea-ice thickness and habitat loss for polar bears and seals.
-Dynamic Permafrost Integration: Adding a "Tipping Point" toggle to simulate methane release from thawing tundra.
+Known Limitations of V0.5
 
-Technical Stack Language: 
+Wetlands are constant (no temperature feedback yet).
+No CO₂ engine yet (methane‑only warming looks small).
+No CH₄–OH feedback loop beyond lifetime scaling.
+Arctic amplification kept simple with a factor of ).
+
+
+Road Map
+M2 M will have versions v0.5 through v2.0
+
+V0.6
+Arctic Restoration Modules: 
+Peatland restoration and Kelp/Tundra sequestration rates.
+Black Carbon (Soot) Logic: 
+Integration of albedo-loss metrics driven by shipping and flaring.
+Create data files from each run
+Add visualizations 
+
+
+
+
+Technical Stack Language used so far : 
 Python 3.x
+Numpy and Python Pandas
 Framework: StreamlitData 
+
 Sources: Global Methane Budget (Saunois et al.), NOAA, IPCC AR6.
