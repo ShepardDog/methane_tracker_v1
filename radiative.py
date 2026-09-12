@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 ch4_params = c.ch4parameters()
 rf_params = c.radiative_forcing()
+co2_params = c.co2_params
 
 M0 = rf_params.CH4_PPB_M0 # historical pre-industrial methane concentration in ppb (1850)
 RF_CONSTANT = rf_params.RF_CONSTANT
@@ -69,3 +70,38 @@ def calc_warming_petential_CH4(ch4_ppb, N2O_PPB_PROJECTION, ch4_ppb_current, N2O
     projected_rf_ch4 = projected_rf_ch4[-1]  # Get the last value
     
     return projected_warming, projected_rf_ch4
+
+
+
+  
+
+def calc_radiative_forcing_co2(time_horizon, co2_params, co2_ppm_removed):
+    baseline = co2_params.CO2_ppm_baseline
+    co2_ppm = co2_params.CO2_ppm
+    current = co2_ppm[time_horizon]
+    coefficient = co2_params.coefficient
+    predicted_radiative = coefficient * np.log(current / baseline)
+    adjusted_ppm = current - co2_ppm_removed
+    adjusted_radiative = coefficient * np.log(adjusted_ppm / baseline)
+    delta_radiative = predicted_radiative - adjusted_radiative
+
+    return delta_radiative
+
+
+
+def calc_cooling_potential_kelp(lambda_sensitivity, delta_radiative):
+    return lambda_sensitivity * delta_radiative
+
+def calc_kelp_temp_impact(time_horizon, co2_params, co2_removed_ppm, lambda_sensitivity):
+    delta = calc_radiative_forcing_co2(time_horizon, co2_params, co2_removed_ppm)
+    cooling_potential = calc_cooling_potential_kelp(lambda_sensitivity, delta)
+    return cooling_potential, delta
+
+if __name__ == "__main__":
+    time_horizon = 20
+    co2_removed_ppm = 8.875391116379413
+    x, y = calc_kelp_temp_impact(time_horizon, co2_params, co2_removed_ppm, rf_params.lambda_sensitivity)
+    print (x, y)
+
+
+
