@@ -5,7 +5,9 @@ import radiative as r
 import validator as val
 import data as dt
 import co2_stocks as co2
+import kelp as kp
 import numpy as np
+import storm as sto
 
 def simulate_methane_engine (sector_list:list, fossil_fuel_list:list, params: dict, time_horizon: int):
     
@@ -50,9 +52,25 @@ def simulate_methane_engine (sector_list:list, fossil_fuel_list:list, params: di
     #rf_ch4_array, rf_ch4, global_warming = r.calc_ch4_rf (ch4_ppb_update, r.N2O_PPB_PROJECTION )
     ch4_warming, rf_ch4  = r.calc_warming_petential_CH4(ch4_ppb_update, N2O_PPB, ppb_ch4, current_N20_ppb)
     return tot_emission, current_stock, tot_co2,  rf_ch4, ch4_warming
+    sink = kelp
 
+def simulate_kelp_growth_engine(time_horizon, ha, kelp_params, months=12):
+    
+    tot_co2_sink, annual_co2_sink, co2_removed_ppm = kp.kelp_growth_simulator(time_horizon, ha, kelp_params, months)
+    #need to have the data function for annual_co2_sink
+    return tot_co2_sink, co2_removed_ppm
 
+def simulate_temp_drop_kelp(time_horizon, co2_params, co2_removed_ppm, lambda_sensitivity):
+    delta = r.calc_radiative_forcing_co2(time_horizon, co2_params, co2_removed_ppm)
+    cooling_potential = r.calc_cooling_potential_kelp(lambda_sensitivity, delta)
+    return cooling_potential, delta
 
+#wrapper
+
+def kelp_co2_engine(time_horizon, ha, kelp_params, co2_params, lambda_sensitivity, months=12):
+    tot_co2_sink, co2_removed_ppm = simulate_kelp_growth_engine(time_horizon, ha, kelp_params, months)
+    cooling_potential_kelp, delta_radiative = simulate_temp_drop_kelp(time_horizon, co2_params, co2_removed_ppm, lambda_sensitivity)
+    return  tot_co2_sink, cooling_potential_kelp, delta_radiative
 
 
 
@@ -68,12 +86,16 @@ if __name__ == "__main__":
         "paddy": -0.1,
         "shipping": 0.0,
         "flares": 0.1,
-        "transport": 0.1
+        "transport": 0.1,
+        "kelp":100
     }
     time_horizon = 5
+    
 
     total_emission, current_stock, tot_co2, tot_rf_ch4, global_warming = simulate_methane_engine(sector_list, fossil_fuel_list, params, time_horizon)
     print("Total Emission:", total_emission)
+    ha= params["kelp"]
     
-    print("Current Stock:", current_stock)
+    co2_sink  = simulate_kelp_growth_engine(time_horizon, ha, kp.kelp_params, months=12)
+    print("CO2 sink:", co2_sink)
     
