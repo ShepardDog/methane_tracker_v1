@@ -2,11 +2,15 @@
 # Methane emissions baseline (Global Methane Budget 2023, Saunois et al.)
 # Values in Mg CH4 per year
 # -------------------------
+# Param default rule: if a value could plausibly vary per call/scenario (site params, 
+# things with a literature range), give it an argument-level default. If it's a fixed 
+# physical/mathematical constant that should never change per call, keep it out of the 
+# signature entirely and reference the module-level constant in the function body.
 
-
-#import numpy as np
+import numpy as np
 import pandas as pd
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
 
 #source cards
 
@@ -23,9 +27,13 @@ ch4_params = ch4parameters()
 @dataclass(frozen=True)
 class co2parameters:
     ref_stock:float = 3.38e6 
-    ppm_co2:float = 431.10
+    ppm_co2:float = 424
     ch4_to_co2_mass:float = 44/16
-
+    CO2_ppm:np.ndarray = field(
+        default_factory=lambda: np.array([425, 426, 428, 429, 430, 431, 432, 433, 434, 435, 435, 436, 436, 437, 437, 437, 437, 437, 437, 437, 438 ])) #SPP1 , with projected 1.5 ℃
+    CO2_ppm_baseline:float = 280
+    coefficient: float= 5.35 #radiative_forcing_coefficient for CO2
+    atmospheric_conversion_factor: float = 2130 # CO₂ Information Analysis Center. multiplying by this factor will convert to ppm (2130Tg carbon is considered equivalant to 1PPM )
 co2_params = co2parameters()
 
 ch4_baseline = ch4_params.ref_stock
@@ -34,7 +42,7 @@ arctic_factor = 3.0  # Amplification factor for Arctic temperature relative to g
 
 carbon_sinks= {
     "tundra":{"label":"","min_value": 0, "max_value": 500_000, "value": 0, "emoji":"🌱",  "step":100, "key":"tundra", "format":"%d%%", "help":"Area of tundra restored. Impacts CH₄ emissions and surface albedo.", "title":"Tundra Restoration (Ha)"},
-    "kelp_cultivation":{"label":"kelp","min_value": 0, "max_value": 200_000, "value":0, "emoji":"🌿" ,"step":100, "key":"kelp", "format":"%d%%", "help":"", "title":"Kelp Cultivation (ha)"}, 
+    "kelp_cultivation":{"label":"kelp","min_value": 0, "max_value":1_000_000, "value":0, "emoji":"🌿" ,"step":100, "key":"kelp", "format":"%d%%", "help":"", "title":"Kelp Cultivation (ha)"}, 
     "peatland_restoration":{"label":"peat","min_value": 0, "max_value": 800_000, "value":0, "emoji":"🌾" ,"step":150, "key":"peat", "format":"%d%%", "help":"", "title":"Peatland restoration (ha)"}, 
     
     }
@@ -148,7 +156,7 @@ ch4_emission = {
     "oil": 45,
     "gas": 35,     
     "wetlands": 180,
-    "unit" : "Mt CH₄/year"   
+    "unit" : "Tg CH₄/year"   
     # "biomass_burning": 35     # for now optional, could add later
 }
 
@@ -169,6 +177,100 @@ class radiative_forcing:
     lambda_sensitivity: float = 0.8  # Climate sensitivity parameter (W/m² per °C)
 
 radiative = radiative_forcing()
-   
+
+#Arctic storm probabilities
+storm_prob = {1:0.6, 2:0.55, 3:0.5, 4:0.4, 5: 0.3, 6:0.2, 7: 0.2, 8:0.25, 9:0.4, 10:0.55, 11:0.6,12:0.65 }
+
+# TODO: V0.6+ 
+# value taken from  Sacchrina latissima
+# Assumed constant in V0.5
+# Seasonal variability ignored
+# See Smith et al. 2023
+
+@dataclass(frozen=True)
+class biomass_growth:
+    max_density_per_ha: float = 0.00003  # Carrying capacity for kelp # between 30 to 40 per ha in Tg/ha (based on literature values)
+    initial_weight: float = 5e-9  # Initial biomass - starter seed weight in Tg/ha (based on literature values)
+    dry_weight_fraction: float = 0.1   # Fraction of kelp biomass that is dry weight (based on literature values)
+    carbon_fraction : float = 0.32  # Fraction of dry weight that is carbon (based on literature values) between 0.3 to 0.35
+    CO2_weight : float = 44/12 # Conversion factor from carbon to CO2 (based on molecular weights)
+    kelp_growth_rates = np.array([0.0, 0.4, 0.7, 0.8, 0.5, 0.5, 0.6, 0.5, 0.3, 0.2, 0.1, 0.0]) #place holder values for the kelp growths Feb - Jan 
+
+KELP_PARAMETERS = biomass_growth()
+
+
+@dataclass(frozen=True)
+#new: float = (1- 0.45) means the damage caused by level 1 strom for young kelp growth is 45% of the growth will be wipped off. 1 - 0.45= 0.55 of the mass will remain 
+class storm_impact1:
     
+    new: float =(1 -0.45) # young kelp growth > 1 year
+    medium: float =(1- 0.35) # kelp growth bet 1 to 2 years 
+    mature: float =(1 - 0.25) # kelp growth > 2 years
+IMPACT1 = storm_impact1()
+
+class storm_impact2:
     
+    new: float = (1- 0.55) # young kelp growth > 1 year
+    medium: float =(1- 0.45) # kelp growth bet 1 to 2 years 
+    mature: float =(1- 0.35) # kelp growth > 2 years
+IMPACT2 = storm_impact2()
+
+class storm_impact3:
+    
+    new: float =(1 - 0.65) # young kelp growth > 1 year
+    medium: float =(1 -0.55 )# kelp growth bet 1 to 2 years 
+    mature: float =(1- 0.45) # kelp growth > 2 years
+IMPACT3 = storm_impact3()
+
+
+
+@dataclass(frozen=True)
+class storm_phase:
+    years: int
+    storm_min_baseline: int
+    storm_max_baseline: int
+    strength_prob: np.ndarray
+
+    # Creating a class blueprint for storm phases
+    @classmethod
+    def phase0(cls) -> "storm_phase":
+        return cls(
+            years=5,
+            storm_min_baseline=5,
+            storm_max_baseline=10,
+            strength_prob=np.array([0.65, 0.25, 0.10])
+        )
+
+    @classmethod
+    def phase1(cls) -> "storm_phase":
+        return cls(
+            years=10,
+            storm_min_baseline=6,
+            storm_max_baseline=11,
+            strength_prob=np.array([0.60, 0.28, 0.12])
+        )
+
+    @classmethod
+    def phase2(cls) -> "storm_phase":
+        return cls(
+            years=15,
+            storm_min_baseline=7,
+            storm_max_baseline=12,
+            strength_prob=np.array([0.53, 0.32, 0.15])
+        )
+
+    @classmethod
+    def phase3(cls) -> "storm_phase":
+        return cls(
+            years=20,
+            storm_min_baseline=8,
+            storm_max_baseline=13,
+            strength_prob=np.array([0.45, 0.35, 0.20])
+        )
+
+# 2. Instantiating phase objects from the class blueprint
+p0 = storm_phase.phase0()
+p1 = storm_phase.phase1()
+p2 = storm_phase.phase2()
+p3 = storm_phase.phase3()
+
