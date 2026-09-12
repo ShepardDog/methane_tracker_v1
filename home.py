@@ -23,9 +23,10 @@ import emission as em
 import stocks as s
 import radiative as r
 import co2_stocks as co
+import kelp as kp
+import storm as sto
 import simulation as sim
 import numpy as np
-
 
 
 
@@ -481,21 +482,47 @@ params = {
 time_horizon = t_slider
 ch4_params =c.ch4parameters
 
+
 sector_list = c.sector_list
 fossil_fuel_list = c.fossil_fuel_list
+
+CO2_params = c.co2_params
+CO2_ppm_baseline = CO2_params.CO2_ppm_baseline
+CO2_ppm = CO2_params.CO2_ppm[time_horizon]
+coefficient = CO2_params.coefficient
+lambda_sensitivity = c.radiative.lambda_sensitivity
+
+
 
 if time_horizon == 0:
    # gross_ch4 = 0
     net_ch4 = c.ch4_baseline
     earth_warming, co2_gain, ch4_rf, ch4_added, bc_added,  = 0, 0, 0, 0, 0
-    co2_sink, ch4_sink, redative_forcing, global_temp, arctic_temp, sea_ice_change = 0, 0, 0, 0, 0, 0
+    co2_sink, ch4_sink, radiative_forcing, global_temp, arctic_temp, sea_ice_change = 0, 0, 0, 0, 0, 0
     
 else:
 
-    ch4_added, net_ch4, co2_gain,  redative_forcing, global_temp = sim.simulate_methane_engine(sector_list, fossil_fuel_list, params, time_horizon)
+    ch4_added, net_ch4, co2_gain,  radiative_forcing, global_temp = sim.simulate_methane_engine(sector_list, fossil_fuel_list, params, time_horizon)
+    #-ve radiative forcing from kelp CO2 sink
+    #st.write(radiative_forcing)
+    
+    kelp_params = c.KELP_PARAMETERS
+    co2_params = c.co2_params
+    ha= params["kelp"]
+    
+
+    k_co2_sink, cooling_potential_kelp, delta_radiative_kelp = sim.kelp_co2_engine(time_horizon, ha, kelp_params, co2_params, lambda_sensitivity, months=12)
+    st.write(cooling_potential_kelp)
+    #radiative_forcing-=delta_radiative_kelp
+     
+    
+    global_temp -= cooling_potential_kelp
     arctic_temp = c.arctic_factor * global_temp
-    #Placeholder for now - to be added in the next version
-    co2_sink, ch4_sink,  sea_ice_change = 0, 0, 0, 
+    
+    #TODO Add all other co2 sinks to the co2_sink variable the unit in Tg and convert to Gt for the card display
+    #o2_sink = k_co2_sink/1_000_000
+    co2_sink = k_co2_sink
+    ch4_sink,  sea_ice_change = 0, 0 
     
     
 #-------------------------
@@ -512,7 +539,7 @@ cards_sinks ={
     
     "co2_prevented":{"variable":co2_sink, "unit":"Tg" ,"description":"Nature-Based CO₂ Removal."},
     "ch4_prevented" :{"variable":ch4_sink, "unit":"Tg" ,"description":"Nature-Based CH₄ Removal"},
-    "net_rad":{"variable":redative_forcing, "unit":"W/m²" , "description":"Net Radiative Forcing."}
+    "net_rad":{"variable":radiative_forcing, "unit":"W/m²" , "description":"Net Radiative Forcing."}
 }
 
 with col2:
@@ -619,10 +646,6 @@ with col_sea_ice:
     </div>
 </div>
 """, unsafe_allow_html=True)
-
-st.write(co2_gain)
-
-
 
 
 
