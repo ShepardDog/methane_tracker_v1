@@ -1,5 +1,5 @@
 🧊 PoleWatch: Arctic Methane Logic (V1.0)A System Dynamics Framework for Sectoral Emissions & Arctic Restoration Overview. MVP - Minimal Viable Physics
-
+https://methanetrackerv1-now4n8eutjh6c2hhvvyavn.streamlit.app/
 PoleWatch is an independent research tool designed to visualize the impact of specific methane (CH_4) sources on the Arctic energy balance. 
 Core Features (V1.0)
 First-Order Decay Engine: Implements a linear oxidation model (8.3% annual decay) to track atmospheric stock over a 20-year horizon.
